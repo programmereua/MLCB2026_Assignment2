@@ -1,8 +1,15 @@
+data/
+*.csv
 __pycache__/
 *.pyc
+.venv/
+venv/
+.env
 .ipynb_checkpoints/
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
+*.db
+*.log
 catboost_info/
-*.tsv
