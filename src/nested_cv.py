@@ -27,7 +27,7 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 from mrmr import mrmr_classif
 import shap
 
-# Reuse the feature definitions and preprocessor from eda_utils
+# Reuse the features from eda_utils
 from eda_utils import (
     target, continuous, binary, categorical, ordinal, features,
     build_preprocessor
@@ -97,20 +97,19 @@ class RepeatedNestedCV:
 
     def _inner_loop(self, X_tr, y_tr, name, seed):
 
-        # grab the search space + estimator for this algorithm
-        space_fn = self.param_spaces[name]
+       
+        space_fn = self.param_spaces[name]  # the search space + estimator for this algorithm
         base_est = self.estimators[name]
 
         # save the fold scores of each trial (needed for "best_median")
         trial_scores = {}
 
-        # print(f"  starting tuning for {name}...")   # was useful while debugging
+        # print(f"  starting tuning for {name}")   
 
         def objective(trial):
-            # Optuna proposes some hyperparameters
+            # Optuna 
             chosen = space_fn(trial)
 
-            # fresh estimator with the proposed params
             my_clf = clone(base_est).set_params(**chosen)
             my_pipe = self._build_pipeline(my_clf)
 
@@ -219,8 +218,8 @@ class RepeatedNestedCV:
 
     def run(self, X, y):
 
-        # full repeated nested CV with hyperparameter tuning
-        for name in self.estimators:
+      
+        for name in self.estimators:   # full repeated nested CV with hyperparameter tuning
 
             print(f"\n[rnCV] {name}")
 
@@ -277,7 +276,7 @@ class RepeatedNestedCV:
 
             row = {"Algorithm": name}
 
-            # for each metric -> median + 95% bootstrap CI
+            # for each metric - median + 95% bootstrap CI
             for m in metric_cols:
 
                 vals = df[m].values             # 50 fold-level values
@@ -290,7 +289,7 @@ class RepeatedNestedCV:
                     boots.append(np.median(sample))
                 boots = np.array(boots)
 
-                # 2.5% and 97.5% percentiles -> 95% CI
+                # 2.5% and 97.5% percentiles 95% CI
                 lo, hi = np.percentile(boots, [2.5, 97.5])
 
                 row[f"{m}_median"] = round(med, 3)
@@ -324,7 +323,7 @@ def _impute_for_mrmr(X_train, X_test=None):
 
     # print(f"  imputed train: {X_tr_imp.shape}, cont={len(cont_here)}, cat={len(cat_here)}")
 
-    # if no test set passed -> return only the imputed train
+    # if no test set passed return only the imputed train
     if X_test is None:
         return X_tr_imp
 
@@ -339,7 +338,7 @@ def _impute_for_mrmr(X_train, X_test=None):
 
 
 
-# Task 4 - main FS class
+# Task 4 
 
 class RepeatedNestedCV_FS(RepeatedNestedCV):
 
@@ -352,11 +351,10 @@ class RepeatedNestedCV_FS(RepeatedNestedCV):
 
         self.k_features = k_features
 
-        # how many times each feature was selected (stability tracking)
+        # how many times each feature was selected 
         self.feature_counts_ = {}
 
-        # which features are active in the current outer fold
-        # (used by _build_pipeline to know what columns to expect)
+
         self._current_selected = None
 
 
@@ -364,7 +362,7 @@ class RepeatedNestedCV_FS(RepeatedNestedCV):
 
         picked = self._current_selected
 
-        # if no selection happening yet, just use the parent's pipeline
+      
         if picked is None:
             return super()._build_pipeline(est)
 
@@ -391,11 +389,11 @@ class RepeatedNestedCV_FS(RepeatedNestedCV):
         y_te = y.iloc[test_idx]
 
 
-        # 1. impute X_train (using X_train stats only) so mRMR can run
+        # impute X_train (using X_train stats only) so mRMR can run
         X_tr_imp = _impute_for_mrmr(X_tr)
 
 
-        # 2. mRMR feature selection on the outer-train only
+        #  mRMR feature selection on the outer-train only
         picked = list(mrmr_classif(
             X=X_tr_imp, y=y_tr, K=self.k_features, show_progress=False))
 
@@ -539,8 +537,11 @@ def find_best_params(X, y, estimator, space_fn,
     def objective(trial):
         params   = space_fn(trial)
         clf      = clone(estimator).set_params(**params)
+        # only pass the columns that actually exist in X (handles feature-selected subset)
+        cont_here = [c for c in continuous if c in X.columns]
+        cat_here  = [c for c in (binary + categorical + ordinal) if c in X.columns]
         pipeline = Pipeline([
-            ("preprocessor", build_preprocessor()),
+            ("preprocessor", build_preprocessor(cont_here, cat_here)),
             ("clf", clf)
         ])
         kfold = StratifiedKFold(
@@ -561,8 +562,11 @@ def find_best_params(X, y, estimator, space_fn,
 
 def save_final_model(X, y, best_params, path="models/final_model.pkl"):
     clf = LinearDiscriminantAnalysis(**best_params)
+    # only pass the columns that actually exist in X (handles feature-selected subset)
+    cont_here = [c for c in continuous if c in X.columns]
+    cat_here  = [c for c in (binary + categorical + ordinal) if c in X.columns]
     final_pipeline = Pipeline([
-        ("preprocessor", build_preprocessor()),
+        ("preprocessor", build_preprocessor(cont_here, cat_here)),
         ("clf", clf)
     ])
     final_pipeline.fit(X, y)
@@ -591,12 +595,16 @@ def compute_shap(final_pipeline, X):
         final_pipeline.named_steps["clf"], X_transformed)
     shap_vals  = explainer(X_transformed)
 
+    # use the actual columns of X, not the global features list,
+    # so this works correctly when a feature-selected subset is passed
+    fnames = list(X.columns)
+
     # Beeswarm
     shap.summary_plot(shap_vals.values, X_transformed,
-                      feature_names=features, show=True)
+                      feature_names=fnames, show=True)
     # Bar
     shap.summary_plot(shap_vals.values, X_transformed,
-                      feature_names=features, plot_type="bar", show=True)
+                      feature_names=fnames, plot_type="bar", show=True)
     # Waterfall for one patient
     shap.plots.waterfall(shap_vals[0], show=True)
     return shap_vals, explainer
@@ -610,8 +618,11 @@ def error_analysis(X, y, best_params, test_size=0.2, random_state=42):
         X, y, test_size=test_size, stratify=y, random_state=random_state)
 
     clf      = LinearDiscriminantAnalysis(**best_params)
+    # only pass the columns that actually exist in X (handles feature-selected subset)
+    cont_here = [c for c in continuous if c in X.columns]
+    cat_here  = [c for c in (binary + categorical + ordinal) if c in X.columns]
     pipeline = Pipeline([
-        ("preprocessor", build_preprocessor()),
+        ("preprocessor", build_preprocessor(cont_here, cat_here)),
         ("clf", clf)
     ])
     pipeline.fit(X_train, y_train)
@@ -651,7 +662,8 @@ def error_analysis(X, y, best_params, test_size=0.2, random_state=42):
     shap_vals = explainer(X_val_transformed)
 
     print("\nSHAP summary — validation set:")
+    fnames_val = list(X_val.columns)
     shap.summary_plot(shap_vals.values, X_val_transformed,
-                      feature_names=features, show=True)
+                      feature_names=fnames_val, show=True)
 
     return fp, fn, correct, shap_vals

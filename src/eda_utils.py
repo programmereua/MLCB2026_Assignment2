@@ -1,11 +1,9 @@
 import warnings
 warnings.filterwarnings("ignore")
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder
 from sklearn.decomposition import PCA
 from sklearn.impute import SimpleImputer
@@ -14,7 +12,6 @@ from sklearn.compose import ColumnTransformer
 
 
 # the features
-
 target     = "num"
 continuous  = ["age", "trestbps", "chol", "thalach", "oldpeak"]
 binary      = ["sex", "fbs", "exang"]
@@ -65,27 +62,33 @@ def plot_boxplots(df):
     
     fig, axes = plt.subplots(1, 5, figsize=(20, 4))
     for ax, col in zip(axes, continuous):
+        
         sns.boxplot(x=target, y=col, data=df, ax=ax)
         ax.set_title(col)
+        
     plt.show()
 
 def plot_histograms(df):
     
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    
     axes = axes.flatten()
     for ax, col in zip(axes, continuous):
         df[df[target] == 0][col].hist(ax=ax, bins=20, alpha=0.6, label="0")
         df[df[target] == 1][col].hist(ax=ax, bins=20, alpha=0.6, label="1")
         ax.set_title(col)
         ax.legend()
+        
     plt.show()
 
 def plot_countplots(df):
     
     fig, axes = plt.subplots(2, 4, figsize=(20, 8))
+    
     axes = axes.flatten()
     
     for ax, col in zip(axes, binary + categorical + ordinal):
+        
         sns.countplot(x=col, hue=target, data=df, ax=ax)
         ax.set_title(col)
     plt.show()
@@ -95,7 +98,7 @@ def plot_correlation(df):
     cols_to_check = features + [target]
     corr = df[cols_to_check].corr(method="spearman")
 
-    # Draw the heatmap
+    # the heatmap
     plt.figure(figsize=(10, 8))
     sns.heatmap(
         corr,
@@ -112,8 +115,7 @@ def plot_correlation(df):
     return corr
 
 
-# build_preprocessor lives here because plot_pca below needs it,
-# and it is also imported by nested_cv.py for the modelling pipeline.
+# build_preprocessor for pca and it is also imported by nested_cv.py for the modeling pipeline.
 def build_preprocessor(cont_cols=None, cat_cols=None):
     if cont_cols is None:
         cont_cols = continuous
@@ -138,26 +140,27 @@ def build_preprocessor(cont_cols=None, cat_cols=None):
     return preprocessor
 
 
-# Reduce all our features down to just 2 numbers (PC1, PC2) so we can see if classes separate
+# Reduce all our features down to just 2 numbers PC1, PC2
+#so we can see if classes separate
 def plot_pca(df):
 
-    # Split data into inputs X and labels y
+  
     X = df[features]
     y = df[target]
 
-    # encode the features the same way we will do for for training
+    # encode the features
     preprocessor = build_preprocessor()
     X_ready = preprocessor.fit_transform(X)
 
-    # Reduce to 2 dimensions with PCA
+    # rduce to 2 dimensions with PCA
     pca = PCA(n_components=2)
     X_2d = pca.fit_transform(X_ready)
 
-    # How much info each dimension kept 
+    # how much info each dimension kept 
     pc1_info = pca.explained_variance_ratio_[0] * 100  
     pc2_info = pca.explained_variance_ratio_[1] * 100
 
-    # Draw one colour per class
+    # draw one colour per class
     plt.figure(figsize=(7, 6))
 
     for class_label, color in zip([0, 1], ["steelblue", "tomato"]):
@@ -174,7 +177,7 @@ def plot_pca(df):
     plt.xlabel(f"PC1  ({pc1_info:.1f}% of variance)")
     plt.ylabel(f"PC2  ({pc2_info:.1f}% of variance)")
     
-    plt.title("PCA – 2D View of the Data")
+    plt.title("PCA  2D View of the Data")
     plt.legend()
     plt.show()
 
